@@ -1,0 +1,166 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import json
+import os
+from datetime import datetime
+
+FILENAME = 'trainings.json'
+
+# Загрузка данных
+def load_trainings():
+    if os.path.exists(FILENAME):
+        with open(FILENAME, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return []
+
+# Сохранение данных
+def save_trainings():
+    with open(FILENAME, 'w', encoding='utf-8') as f:
+        json.dump(trainings, f, ensure_ascii=False, indent=4)
+
+# Обновление таблицы
+def refresh_treeview(filter_type=None, filter_date=None):
+    for item in tree.get_children():
+        tree.delete(item)
+    for training in trainings:
+        if filter_type and training['type'] != filter_type:
+            continue
+        if filter_date:
+            try:
+                date_obj = datetime.strptime(training['date'], '%Y-%m-%d')
+                filter_date_obj = datetime.strptime(filter_date, '%Y-%m-%d')
+                if date_obj != filter_date_obj:
+                    continue
+            except ValueError:
+                continue
+        tree.insert('', 'end', values=(training['date'], training['type'], training['duration']))
+
+# Добавление тренировки
+def add_training():
+    date_str = entry_date.get().strip()
+    t_type = entry_type.get().strip()
+    duration_str = entry_duration.get().strip()
+
+    # Проверка корректности
+    try:
+        datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        messagebox.showwarning("Ошибка", "Некорректный формат даты. Используйте ГГГГ-ММ-ДД.")
+        return
+    if not t_type:
+        messagebox.showwarning("Ошибка", "Тип тренировки не должен быть пустым.")
+        return
+    if not duration_str.isdigit() or int(duration_str) <= 0:
+        messagebox.showwarning("Ошибка", "Длительность должна быть положительным числом.")
+        return
+
+    training = {'date': date_str, 'type': t_type, 'duration': duration_str}
+    trainings.append(training)
+    save_trainings()
+    refresh_treeview()
+    entry_date.delete(0, tk.END)
+    entry_type.delete(0, tk.END)
+    entry_duration.delete(0, tk.END)
+
+# Удаление выбранной записи
+def delete_training():
+    selected = tree.selection()
+    if not selected:
+        messagebox.showwarning("Ошибка", "Выберите тренировку для удаления.")
+        return
+    values = tree.item(selected[0])['values']
+    for t in trainings:
+        if t['date'] == values[0] and t['type'] == values[1] and t['duration'] == str(values[2]):
+            trainings.remove(t)
+            break
+    save_trainings()
+    refresh_treeview()
+
+# Применение фильтра
+def apply_filter():
+    filter_type = combo_type.get()
+    filter_date = entry_filter_date.get().strip()
+    if filter_type == "Все типы":
+        filter_type = None
+    if filter_date:
+        try:
+            datetime.strptime(filter_date, '%Y-%m-%d')
+        except ValueError:
+            messagebox.showwarning("Ошибка", "Некорректный формат даты для фильтра. Используйте ГГГГ-ММ-ДД.")
+            return
+    else:
+        filter_date = None
+    refresh_treeview(filter_type=filter_type, filter_date=filter_date)
+
+# Очистка фильтра
+def clear_filter():
+    combo_type.set("Все типы")
+    entry_filter_date.delete(0, tk.END)
+    refresh_treeview()
+
+# Основное окно
+root = tk.Tk()
+root.title("Training Planner")
+
+# Ввод данных
+frame_input = tk.Frame(root)
+frame_input.pack(padx=10, pady=10)
+
+tk.Label(frame_input, text="Дата (ГГГГ-ММ-ДД)").grid(row=0, column=0, padx=5, pady=5)
+entry_date = tk.Entry(frame_input, width=15)
+entry_date.grid(row=0, column=1, padx=5, pady=5)
+
+tk.Label(frame_input, text="Тип тренировки").grid(row=0, column=2, padx=5, pady=5)
+entry_type = tk.Entry(frame_input, width=15)
+entry_type.grid(row=0, column=3, padx=5, pady=5)
+
+tk.Label(frame_input, text="Длительность (мин)").grid(row=1, column=0, padx=5, pady=5)
+entry_duration = tk.Entry(frame_input, width=15)
+entry_duration.grid(row=1, column=1, padx=5, pady=5)
+
+btn_add = tk.Button(root, text="Добавить тренировку", command=add_training)
+btn_add.pack(pady=5)
+
+# Таблица
+columns = ('Дата', 'Тип', 'Длительность')
+tree = ttk.Treeview(root, columns=columns, show='headings', height=10)
+for col in columns:
+    tree.heading(col, text=col)
+tree.pack(padx=10, pady=10)
+
+btn_delete = tk.Button(root, text="Удалить выбранное", command=delete_training)
+btn_delete.pack(pady=5)
+
+# Фильтр
+frame_filter = tk.Frame(root)
+frame_filter.pack(padx=10, pady=10)
+
+tk.Label(frame_filter, text="Фильтр по типу:").grid(row=0, column=0, padx=5)
+combo_type = ttk.Combobox(frame_filter, values=["Все типы"], state='readonly')
+combo_type.current(0)
+combo_type.grid(row=0, column=1, padx=5)
+
+tk.Label(frame_filter, text="Фильтр по дате:").grid(row=0, column=2, padx=5)
+entry_filter_date = tk.Entry(frame_filter, width=15)
+entry_filter_date.grid(row=0, column=3, padx=5)
+
+btn_apply = tk.Button(frame_filter, text="Применить фильтр", command=apply_filter)
+btn_apply.grid(row=0, column=4, padx=5)
+
+btn_clear = tk.Button(frame_filter, text="Сбросить", command=clear_filter)
+btn_clear.grid(row=0, column=5, padx=5)
+
+# Загрузка данных
+trainings = load_trainings()
+
+# Обновление списка типов
+def update_types():
+    types = set(t['type'] for t in trainings)
+    type_list = ["Все типы"] + sorted(types)
+    combo_type['values'] = type_list
+    combo_type.current(0)
+
+update_types()
+refresh_treeview()
+
+root.mainloop()
